@@ -1,0 +1,2398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS Mega Chess Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --light-square: #f0d9b5;
+            --dark-square: #b58863;
+            --highlight-select: #ffea00;
+            --highlight-move: rgba(0, 150, 0, 0.6);
+            --highlight-merge: rgba(135, 206, 250, 0.8);
+            --highlight-kamikaze: rgba(255, 69, 0, 0.8);
+            --highlight-action: rgba(255, 165, 0, 0.8);
+            --text-color: #333;
+            --bg-color: #1a1a1a;
+            --panel-bg: #f9f9f9;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+        }
+
+        #game-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        #game-container {
+            display: flex;
+            background: #e0e0e0;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            gap: 20px;
+            max-width: 100%;
+        }
+        
+        #board-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(10px, 60px));
+            grid-template-rows: repeat(8, minmax(10px, 60px));
+            border: 4px solid var(--text-color);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+
+        .square {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+
+        .light { background-color: var(--light-square); }
+        .dark { background-color: var(--dark-square); }
+        .square:hover:not(.selected) { filter: brightness(95%); }
+        .piece { line-height: 1; }
+        
+        .special-ability-marker {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 10px;
+            color: white;
+            background: red;
+            padding: 0 3px;
+            border-radius: 4px;
+            line-height: 1.2;
+            opacity: 0.9;
+        }
+        
+        .piece-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .merged-icon {
+            font-size: 32px;
+            line-height: 1;
+            padding: 2px;
+            border-radius: 50%;
+            position: relative;
+            z-index: 10;
+        }
+
+        .merged-icon.white-bg { background-color: rgba(255, 255, 255, 0.7); }
+        .merged-icon.black-bg { background-color: rgba(0, 0, 0, 0.3); }
+
+        .selected {
+            box-shadow: inset 0 0 0 3px var(--highlight-select);
+            background-color: #fce883 !important;
+        }
+        
+        .merge-target { background-color: var(--highlight-merge) !important; }
+        .highlight-move { background-color: rgba(0, 150, 0, 0.6) !important; }
+        /* CORRECTED CLASS NAME for general special actions */
+        .highlight-special { background-color: var(--highlight-action) !important; } 
+        .highlight-kamikaze-path { background-color: var(--highlight-kamikaze) !important; opacity: 0.8; }
+        
+        /* KNIGHT VISUALIZATION UPDATE */
+        .highlight-knight-destination { 
+            background-color: rgba(66, 135, 245, 0.6) !important; /* Blue glow for destination */
+            box-shadow: inset 0 0 0 3px #4287f5;
+        }
+        
+        /* Orange highlight for the path steps */
+        .knight-path-step {
+            cursor: pointer;
+            background-color: var(--highlight-action) !important; 
+            border: 3px solid orange; /* Orange border to show next path square */
+        }
+        
+        .highlight-kamikaze-path::after, 
+        .highlight-move::after, 
+        .highlight-knight-destination::after,
+        .highlight-special::after { /* Included highlight-special for general marker */
+            content: '';
+            display: block;
+            width: 20%;
+            height: 20%;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Trample text removed from JS, but keep small style for other markers */
+        .trample-marker-small {
+            font-size: 8px;
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            color: black; 
+            font-weight: bold;
+        }
+
+        #status-message {
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: 700;
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            background-color: white;
+            color: var(--text-color);
+            width: 100%;
+        }
+
+        #controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: var(--panel-bg);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            min-width: 150px;
+        }
+        
+        .control-button {
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            transition: background-color 0.15s;
+        }
+        
+        .control-button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #kamikaze-btn { background-color: #ff4500; color: white; }
+        #kamikaze-btn:hover:not(:disabled) { background-color: #cc3700; }
+        #special-btn, #finish-garrison-btn { background-color: #007bff; color: white; }
+        #special-btn:hover:not(:disabled), #finish-garrison-btn:hover:not(:disabled) { background-color: #0056b3; }
+        #cancel-btn { background-color: #ccc; color: var(--text-color); }
+        #cancel-btn:hover:not(:disabled) { background-color: #bbb; }
+        #info-btn { background-color: #ffc107; color: var(--text-color); }
+        #info-btn:hover:not(:disabled) { background-color: #e0a800; }
+        #new-game-btn { background-color: #4CAF50; color: white; margin-top: 10px; }
+        #new-game-btn:hover { background-color: #45a049; }
+
+
+        #dead-pile-container {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: var(--panel-bg);
+            width: 100%;
+        }
+
+        .dead-pile {
+            display: flex;
+            flex-wrap: wrap;
+            min-height: 20px;
+            border: 1px dashed #ccc;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .dead-piece {
+            font-size: 24px;
+            opacity: 0.6;
+            margin: 0 2px;
+        }
+        
+        .dead-piece-selectable {
+            font-size: 24px;
+            margin: 0 2px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            opacity: 1;
+            transition: border-color 0.15s;
+        }
+
+        .dead-piece-selectable:hover {
+            border-color: var(--highlight-special);
+        }
+
+        @media (min-width: 800px) {
+            #game-container { flex-direction: row; }
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.7); 
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background-color: var(--panel-bg);
+            margin: 5% auto; 
+            padding: 30px;
+            border-radius: 12px;
+            width: 80%; 
+            max-width: 600px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        #promotion-options {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .promotion-piece {
+            padding: 10px 15px;
+            font-size: 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid #ccc;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .promotion-piece:hover {
+            background-color: #e0e0e0;
+            transform: translateY(-2px);
+        }
+
+        .promotion-piece.white { color: #333; }
+        .promotion-piece.black { color: #000; }
+        
+        /* Game Over Specific Styling */
+        #game-over-modal .modal-content {
+            text-align: center;
+            background-color: #fce883;
+            border: 5px solid #ff4500;
+        }
+        #game-over-modal h2 {
+            font-size: 2.5em;
+            color: #ff4500;
+        }
+        
+        /* Trample Confirmation Modal */
+        #trample-modal h2 { color: var(--highlight-kamikaze); }
+        #trample-modal button { margin: 5px; padding: 10px; border-radius: 6px; cursor: pointer; }
+        #trample-confirm-btn { background-color: #4CAF50; color: white; }
+        #trample-cancel-btn { background-color: #f44336; color: white; }
+        
+        /* New Kamikaze Complete Modal */
+        #kamikaze-complete-modal h2 { color: var(--highlight-kamikaze); }
+        #kamikaze-complete-modal button { 
+            background-color: var(--highlight-kamikaze); 
+            color: white; 
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        #kamikaze-complete-modal button:hover {
+             background-color: #cc3700;
+        }
+
+
+        /* Styles for Knight Jump Arrows (if enabled) */
+        .knight-arrow {
+            position: absolute;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .knight-arrow-line {
+            transform-origin: 0 50%;
+        }
+
+        .knight-arrow-head {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 6px 0 6px 10px;
+            border-color: transparent transparent transparent red;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-wrapper">
+        <h1>Mega Chess (Super Chess)</h1>
+        <div id="game-container">
+            <div id="board-area">
+                <div id="chessboard-wrapper">
+                    <div id="chessboard">
+                        <!-- Board squares generated by JavaScript -->
+                    </div>
+                </div>
+                <div id="status-message">Loading game...</div>
+            </div>
+
+            <div id="controls">
+                <p class="font-bold text-center">Special Actions:</p>
+                <button id="special-btn" class="control-button" disabled>SPECIAL ABILITY</button>
+                <button id="finish-garrison-btn" class="control-button" style="display:none;" disabled>FINISH GARRISON</button>
+                <button id="kamikaze-btn" class="control-button" disabled>KAMIKAZE (Suicide)</button>
+                <button id="cancel-btn" class="control-button" disabled>Cancel Action</button>
+                
+                <hr>
+                <button id="info-btn" class="control-button">INFO / RULES</button>
+                <button id="new-game-btn" class="control-button">NEW GAME</button>
+
+                <p class="font-bold text-center mt-3">Dead Pile:</p>
+                <div id="dead-pile-container">
+                    <p class="text-sm font-semibold">White Captures (Black Dead):</p>
+                    <div id="dead-white" class="dead-pile"></div>
+                    <p class="text-sm font-semibold mt-2">Black Captures (White Dead):</p>
+                    <div id="dead-black" class="dead-pile"></div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Info Modal -->
+    <div id="info-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Piece Information</h2>
+            <div id="info-content">
+                <p>Select a piece on the board and click this button again to see its specific rules, or see general rules below.</p>
+                <hr>
+                <h3>General Mega Chess Rules</h3>
+                <ul>
+                    <li>**Merging:** Knight+Rook=Oliphaunt, Knight+Bishop=Missionary, Rook+Bishop=Cathedral.</li>
+                    <li>**Kamikaze:** Must be adjacent to the King (except Pawn). Destroys all pieces on path/target area, stops before King. Kamikaze piece is destroyed.</li>
+                    <li>**Capture Reversion:** Merged pieces revert to components upon capture.</li>
+                    <li>**Tracking:** Queen, Rook, Bishop, Knight, Missionary have **one-time** special abilities.</li>
+                    <li>**King Pawn Spawn:** King can spawn a pawn adjacent to itself in its defensive half (ranks 1-4 for White, 5-8 for Black).</li>
+                    <li>**Pawn Promotion:** Pawns promote to Queen, Rook, Bishop, or Knight upon reaching the back rank.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pawn Promotion Modal -->
+    <div id="promotion-modal" class="modal">
+        <div class="modal-content">
+            <h2>Pawn Promotion</h2>
+            <p>Select a piece to promote your Pawn into:</p>
+            <div id="promotion-options">
+                <!-- Promotion pieces will be added here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="game-over-close">&times;</span>
+            <h2 id="game-over-message"></h2>
+            <p>The game has ended. Click NEW GAME to restart.</p>
+        </div>
+    </div>
+
+    <!-- Trample Confirmation Modal -->
+    <div id="trample-modal" class="modal">
+        <div class="modal-content">
+            <h2>Trample Confirmation</h2>
+            <p id="trample-message">The path square contains an enemy Pawn. Do you want to trample and capture it?</p>
+            <button id="trample-confirm-btn">Yes, Trample!</button>
+            <button id="trample-cancel-btn">No, Don't Trample</button>
+        </div>
+    </div>
+    
+    <!-- Kamikaze Complete Modal (NEW) -->
+    <div id="kamikaze-complete-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="kamikaze-complete-header">Kamikaze Complete!</h2>
+            <p id="kamikaze-complete-message">The Knight has reached its final destination and destroyed pieces along its path. Click 'Detonate' to finalize the sacrifice and end the turn.</p>
+            <button id="kamikaze-detonate-btn" class="control-button">Detonate & End Turn</button>
+        </div>
+    </div>
+
+    <script>
+        // ======================= KNIGHT DOUBLE JUMP VISUALS (User Provided) =======================
+        function drawKnightLArrow(fromX, fromY, cornerX, cornerY, toX, toY) {
+            document.querySelectorAll('.knight-arrow').forEach(e => e.remove());
+            function getSquareRect(x, y) {
+                const el = document.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+                return el?.getBoundingClientRect();
+            }
+            const board = document.getElementById('chessboard');
+            const boardRect = board.getBoundingClientRect();
+            function center(rect) {
+                return {
+                    x: rect.left + rect.width / 2 - boardRect.left,
+                    y: rect.top + rect.height / 2 - boardRect.top
+                };
+            }
+            const from = center(getSquareRect(fromX, fromY));
+            const corner = center(getSquareRect(cornerX, cornerY));
+            const to = center(getSquareRect(toX, toY));
+            function createLine(x1, y1, x2, y2) {
+                const len = Math.hypot(x2-x1, y2-y1);
+                const angle = Math.atan2(y2-y1, x2-x1) * 180/Math.PI;
+                const div = document.createElement('div');
+                div.className = 'knight-arrow knight-arrow-line';
+                div.style.left = `${x1}px`;
+                div.style.top = `${y1}px`;
+                div.style.height = '4px';
+                div.style.width = `${len}px`;
+                div.style.background = 'red';
+                div.style.transform = `rotate(${angle}deg)`;
+                return div;
+            }
+            function createArrowHead(x, y, angle) {
+                const head = document.createElement('div');
+                head.className = 'knight-arrow knight-arrow-head';
+                head.style.left = `${x-6}px`;
+                head.style.top = `${y-6}px`;
+                head.style.transform = `rotate(${angle}deg)`;
+                return head;
+            }
+            const line1 = createLine(from.x, from.y, corner.x, corner.y);
+            board.appendChild(line1);
+            board.appendChild(createArrowHead(corner.x, corner.y, Math.atan2(corner.y-from.y, corner.x-from.x)*180/Math.PI));
+            const line2 = createLine(corner.x, corner.y, to.x, to.y);
+            board.appendChild(line2);
+            board.appendChild(createArrowHead(to.x, to.y, Math.atan2(to.y-corner.y, to.x-corner.x)*180/Math.PI));
+        }
+        // ======================= CONSTANTS & HELPERS =======================
+        const WHITE = "white";
+        const BLACK = "black";
+        const ROOK = "Rook", CATHEDRAL = "Cathedral", OLIPHAUNT = "Oliphaunt", MISSIONARY = "Missionary";
+        const KING = "King", QUEEN = "Queen", BISHOP = "Bishop", KNIGHT = "Knight", PAWN = "Pawn";
+        const chessCardinals = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+        const chessDiagonals = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+        const uniDict = {
+            [WHITE]: { [PAWN]: "♙", [ROOK]: "♖", [KNIGHT]: "♘", [BISHOP]: "♗", [KING]: "♔", [QUEEN]: "♕", [CATHEDRAL]: "⛪", [OLIPHAUNT]: "🐘", [MISSIONARY]: "♗" },
+            [BLACK]: { [PAWN]: "♟", [ROOK]: "♜", [KNIGHT]: "♞", [BISHOP]: "♝", [KING]: "♚", [QUEEN]: "♛", [CATHEDRAL]: "⛪", [OLIPHAUNT]: "🐘", [MISSIONARY]: "♝" }
+        };
+
+        const isInBounds = (x, y) => x >= 0 && x < 8 && y >= 0 && y < 8;
+        const knightList = (x, y) => {
+            const list = [];
+            const moves = [[2, 1], [1, 2], [-1, 2], [-2, 1], [-2, -1], [-1, -2], [1, -2], [2, -1]];
+            for (const [dx, dy] of moves) list.push([x + dx, y + dy]);
+            return list;
+        };
+        const kingList = (x, y) => {
+            const list = [];
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    if (dx !== 0 || dy !== 0) list.push([x + dx, y + dy]);
+                }
+            }
+            return list;
+        };
+        const findKingPos = (gameboard, color) => {
+            for (const key in gameboard) {
+                const piece = gameboard[key];
+                if (piece.Color === color && piece.type === KING) return key.split(',').map(Number);
+            }
+            return null;
+        };
+        const isAdjacentToKing = (x, y, gameboard, color) => {
+            const kingPos = findKingPos(gameboard, color);
+            if (!kingPos) return false;
+            const [kx, ky] = kingPos;
+            const dx = Math.abs(x - kx);
+            const dy = Math.abs(y - ky);
+            return dx <= 1 && dy <= 1 && (dx !== 0 || dy !== 0);
+        };
+        const getMergeTargetsFn = (piece, potentialEndPositions, gameboard) => {
+            const targets = [];
+            const mergeableTypes = [ROOK, BISHOP, KNIGHT];
+            if (!mergeableTypes.includes(piece.type)) return targets;
+            for (const [mx, my] of potentialEndPositions) {
+                const targetPiece = gameboard[`${mx},${my}`];
+                if (!targetPiece || targetPiece.Color !== piece.Color) continue;
+                if ((piece.type === ROOK && targetPiece.type === BISHOP) || (piece.type === BISHOP && targetPiece.type === ROOK)) {
+                    targets.push([mx, my, CATHEDRAL]);
+                } else if ((piece.type === ROOK && targetPiece.type === KNIGHT) || (piece.type === KNIGHT && targetPiece.type === ROOK)) {
+                    targets.push([mx, my, OLIPHAUNT]);
+                } else if ((piece.type === BISHOP && targetPiece.type === KNIGHT) || (piece.type === KNIGHT && targetPiece.type === BISHOP)) {
+                    targets.push([mx, my, MISSIONARY]);
+                }
+            }
+            return targets;
+        };
+        const drawLineSegment = (el, fromX, fromY, toX, toY) => {
+            const LINE_THICKNESS = '3px solid red';
+            if (fromX === toX) {
+                if (fromY < toY) el.style.borderTop = LINE_THICKNESS; 
+                else el.style.borderBottom = LINE_THICKNESS;         
+            } else if (fromY === toY) {
+                if (fromX < toX) el.style.borderRight = LINE_THICKNESS;
+                else el.style.borderLeft = LINE_THICKNESS;           
+            }
+        };
+
+        // --- Piece Classes ---
+        class Piece {
+            constructor(color, type) {
+                this.Color = color;
+                this.type = type;
+                this.name = uniDict[color][type];
+                this.hasMoved = false;
+                this.usedSpecialAbility = false;
+                this.garrisonedPawns = 0;
+                this.isPromoted = false;
+            }
+
+            toString() {
+                const isOneTime = [QUEEN, ROOK, BISHOP, KNIGHT, MISSIONARY].includes(this.type);
+                const baseClass = this.Color === WHITE ? 'white-bg' : 'black-bg';
+                let html = '';
+                
+                if ([CATHEDRAL, OLIPHAUNT, MISSIONARY].includes(this.type)) {
+                    html += `<span class="merged-icon ${baseClass}">${this.name}</span>`;
+                } else {
+                    html += `<span class="piece">${this.name}</span>`;
+                }
+
+                let marker = '';
+                if (this.type === ROOK && this.garrisonedPawns > 0) marker = this.garrisonedPawns;
+                else if (isOneTime && this.usedSpecialAbility) marker = 'X';
+                
+                if (marker) html += `<span class="special-ability-marker">${marker}</span>`;
+
+                if ([CATHEDRAL, OLIPHAUNT, MISSIONARY].includes(this.type)) return `<div class="piece-container">${html}</div>`;
+                return html;
+            }
+
+            noConflict(gameboard, initialColor, x, y) {
+                const target = gameboard[`${x},${y}`];
+                return isInBounds(x, y) && (!target || target.Color !== initialColor);
+            }
+            
+            canLandOrMerge(gameboard, initialColor, x, y) {
+                const target = gameboard[`${x},${y}`];
+                return isInBounds(x, y) && (!target || target.Color === initialColor);
+            }
+
+            AdNauseum(x, y, gameboard, Color, intervals) {
+                const answers = [];
+                for (const [xint, yint] of intervals) {
+                    let xtemp = x + xint;
+                    let ytemp = y + yint;
+                    while (isInBounds(xtemp, ytemp)) {
+                        const target = gameboard[`${xtemp},${ytemp}`];
+
+                        if (!target) {
+                            answers.push([xtemp, ytemp]); 
+                        } else {
+                            answers.push([xtemp, ytemp]);
+                            break; 
+                        }
+                        xtemp += xint;
+                        ytemp += yint;
+                    }
+                }
+                return answers;
+            }
+            
+            findKamikazePath(x, y, gameboard, intervals) {
+                const path = [];
+                const opponentKingPos = findKingPos(gameboard, this.Color === WHITE ? BLACK : WHITE);
+                const ownKingPos = findKingPos(gameboard, this.Color);
+
+                for (const [xint, yint] of intervals) {
+                    let xtemp = x + xint;
+                    let ytemp = y + yint;
+                    while (isInBounds(xtemp, ytemp)) {
+                        const key = `${xtemp},${ytemp}`;
+                        
+                        if (opponentKingPos && xtemp === opponentKingPos[0] && ytemp === opponentKingPos[1]) break;
+                        if (ownKingPos && xtemp === ownKingPos[0] && ytemp === ownKingPos[1]) break;
+
+                        if (gameboard[key]) path.push([xtemp, ytemp]);
+                        
+                        xtemp += xint;
+                        ytemp += yint;
+                    }
+                }
+                return path;
+            }
+            
+            getKamikazePath(x, y, gameboard) {
+                return this.findKamikazePath(x, y, gameboard, chessCardinals.concat(chessDiagonals));
+            }
+
+            availableSpecialMoves(x, y, gameboard, deadPile) { return []; }
+        }
+
+        class Knight extends Piece {
+            constructor(color) { super(color, KNIGHT); }
+            availableMoves(x, y, gameboard, Color = this.Color) {
+                return knightList(x, y).filter(([xx, yy]) => {
+                    const isMergeTarget = getMergeTargetsFn(this, [[xx, yy]], gameboard).length > 0;
+                    if (isMergeTarget) return true;
+                    return this.noConflict(gameboard, Color, xx, yy);
+                });
+            }
+            getKamikazePath(x, y, gameboard) {
+                const path = [];
+                knightList(x, y).forEach(([kx, ky]) => {
+                    if (gameboard[`${kx},${ky}`]) path.push([kx, ky]);
+                });
+                return path;
+            }
+            availableSpecialMoves(x, y, gameboard) {
+                if (this.usedSpecialAbility) return [];
+                // The double jump ability highlights all squares reachable in one L-move.
+                const finalMoves = [];
+                
+                knightList(x, y).forEach(([x1, y1]) => {
+                    // Filter: only valid L-move targets (empty or capture enemy)
+                    if (this.noConflict(gameboard, this.Color, x1, y1)) finalMoves.push([x1, y1]);
+                });
+                const uniqueMoves = new Set(finalMoves.map(arr => arr.join(',')));
+                return Array.from(uniqueMoves).map(str => str.split(',').map(Number));
+            }
+        }
+
+        class Rook extends Piece {
+            constructor(color) { super(color, ROOK); }
+            availableMoves(x, y, gameboard ,Color = this.Color) { return this.AdNauseum(x, y, gameboard, Color, chessCardinals); }
+            getKamikazePath(x, y, gameboard) { return this.findKamikazePath(x, y, gameboard, chessCardinals); }
+            
+            availableSpecialMoves(x, y, gameboard, deadPile) {
+                if (this.garrisonedPawns > 0) return this.getDeploymentTargets(x, y, gameboard);
+                if (!this.usedSpecialAbility) return this.getGarrisonTargets(x, y, gameboard);
+                return [];
+            }
+
+            getGarrisonTargets(x, y, gameboard) {
+                const garrisonTargets = [];
+                kingList(x, y).forEach(([kx, ky]) => {
+                    const target = gameboard[`${kx},${ky}`];
+                    if (target && target.Color === this.Color && target.type === PAWN) garrisonTargets.push([kx, ky]);
+                });
+                return garrisonTargets;
+            }
+            
+            getDeploymentTargets(x, y, gameboard) {
+                const targets = [];
+                const color = this.Color;
+                const direction = color === WHITE ? 1 : -1;
+                
+                if (this.garrisonedPawns === 0) return [];
+                
+                kingList(x, y).forEach(([kx, ky]) => {
+                    if (!gameboard[`${kx},${ky}`]) targets.push([kx, ky, 'DEPLOY']);
+                });
+                
+                const pawnAttackDirections = [[1, direction], [-1, direction]];
+                pawnAttackDirections.forEach(([dx, dy]) => {
+                    const targetX = x + dx;
+                    const targetY = y + dy;
+                    const target = gameboard[`${targetX},${targetY}`];
+                    if (isInBounds(targetX, targetY) && target && target.Color !== color) targets.push([targetX, targetY, 'ATTACK']);
+                });
+                
+                const uniqueTargets = new Set(targets.map(arr => `${arr[0]},${arr[1]}`));
+                return Array.from(uniqueTargets).map(str => {
+                    const [mx, my] = str.split(',').map(Number);
+                    const isAttack = targets.some(t => t[0] === mx && t[1] === my && t[2] === 'ATTACK');
+                    return [mx, my, isAttack ? 'ATTACK' : 'DEPLOY'];
+                });
+            }
+        }
+
+        class Bishop extends Piece {
+            constructor(color) { super(color, BISHOP); }
+            availableMoves(x, y, gameboard, Color = this.Color) { return this.AdNauseum(x, y, gameboard, Color, chessDiagonals); }
+            getKamikazePath(x, y, gameboard) { return this.findKamikazePath(x, y, gameboard, chessDiagonals); }
+            availableSpecialMoves(x, y, gameboard, deadPile) {
+                if (this.usedSpecialAbility) return [];
+                const hasDeadPiece = deadPile[this.Color].filter(p => p.type !== PAWN && p.type !== KING).length > 0;
+                if (!hasDeadPiece) return [];
+                return kingList(x, y).filter(([kx, ky]) => !gameboard[`${kx},${ky}`]);
+            }
+        }
+
+        class Queen extends Piece {
+            constructor(color) { super(color, QUEEN); }
+            availableMoves(x, y, gameboard, Color = this.Color) { return this.AdNauseum(x, y, gameboard, Color, chessCardinals.concat(chessDiagonals)); }
+            getKamikazePath(x, y, gameboard) { return this.findKamikazePath(x, y, gameboard, chessCardinals.concat(chessDiagonals)); }
+            availableSpecialMoves(x, y, gameboard) {
+                if (this.usedSpecialAbility) return [];
+                const killTargets = [];
+                kingList(x, y).forEach(([kx, ky]) => {
+                    const target = gameboard[`${kx},${ky}`];
+                    if (target && target.Color !== this.Color) killTargets.push([kx, ky]);
+                });
+                return killTargets;
+            }
+        }
+
+        class King extends Piece {
+            constructor(color) { super(color, KING); }
+            availableMoves(x, y, gameboard, Color = this.Color) { return kingList(x, y).filter(([xx, yy]) => this.noConflict(gameboard, Color, xx, yy)); }
+            
+            availableSpecialMoves(x, y, gameboard) {
+                const isDefensiveHalf = this.Color === WHITE ? y <= 3 : y >= 4;
+                if (!isDefensiveHalf) return [];
+
+                return kingList(x, y).filter(([kx, ky]) => isInBounds(kx, ky) && !gameboard[`${kx},${ky}`]);
+            }
+        }
+        
+        class Pawn extends Piece {
+            constructor(color, direction) {
+                super(color, PAWN);
+                this.direction = direction; 
+                this.hasMoved = false; 
+            }
+
+            availableMoves(x, y, gameboard, Color = this.Color) {
+                const answers = [];
+                const dy = this.direction;
+
+                const forwardKey = `${x},${y + dy}`;
+                if (isInBounds(x, y + dy) && !gameboard[forwardKey]) {
+                    answers.push([x, y + dy]);
+                    if (!this.hasMoved) {
+                        const twoForwardKey = `${x},${y + 2 * dy}`;
+                        if (isInBounds(x, y + 2 * dy) && !gameboard[twoForwardKey]) answers.push([x, y + 2 * dy]);
+                    }
+                }
+
+                for (const dx of [-1, 1]) {
+                    const target = gameboard[`${x + dx},${y + dy}`];
+                    if (isInBounds(x + dx, y + dy) && target && target.Color !== Color) answers.push([x + dx, y + dy]);
+                }
+                
+                return answers;
+            }
+            
+            getKamikazePath(x, y, gameboard) { return []; }
+            
+            availableSpecialMoves(x, y, gameboard) {
+                const color = this.Color;
+                const direction = this.direction;
+                
+                // V-3 Check: Center (x, y), two pawns diagonally behind.
+                const checkV3Formation = () => {
+                    const trailingY = y - direction;
+                    const pawnsInFormation = [];
+
+                    const checkPawn = (px, py) => {
+                        const key = `${px},${py}`;
+                        const piece = gameboard[key];
+                        if (piece && piece.type === PAWN && piece.Color === color) return piece;
+                        return null;
+                    };
+                    
+                    // 1. Check the three pawns forming the V (center, left-rear, right-rear)
+                    const centerPawn = checkPawn(x, y);
+                    const leftPawn = checkPawn(x - 1, trailingY);
+                    const rightPawn = checkPawn(x + 1, trailingY);
+
+                    if (!centerPawn || !leftPawn || !rightPawn) return null;
+                    
+                    pawnsInFormation.push([x, y], [x - 1, trailingY], [x + 1, trailingY]);
+
+                    // 2. Check for blocking pieces (one rank ahead of the two trailing pawns)
+                    const frontY = trailingY + direction; // This is the rank of the leading pawn (y)
+                    
+                    // Squares to check: immediately in front of the trailing pawns (x-1, y) and (x+1, y)
+                    const blockCheckSquares = [[x - 1, frontY], [x + 1, frontY]];
+
+                    // Check if any blocking squares are occupied by ANY piece (friend or foe)
+                    for (const [bx, by] of blockCheckSquares) {
+                        if (isInBounds(bx, by) && gameboard[`${bx},${by}`]) return null; // BLOCKING PIECE FOUND
+                    }
+                    
+                    // 3. Define move target (one rank ahead of the lead pawn)
+                    const targetY = y + direction;
+                    
+                    if (!isInBounds(x, targetY)) return null; // Move off board
+
+                    return { 
+                        moveTarget: [x, targetY], 
+                        formation: pawnsInFormation, 
+                        size: 3 
+                    };
+                };
+
+                const result = checkV3Formation();
+                if (result) return [[x, y, result.size, result.formation, result.moveTarget]];
+                
+                return [];
+            }
+        }
+        
+        // --- Merged Pieces ---
+
+        class Cathedral extends Piece {
+            constructor(color) { super(color, CATHEDRAL); }
+            availableMoves(x, y, gameboard) { return []; }
+            getKamikazePath(x, y, gameboard) { return kingList(x, y).filter(([kx, ky]) => !gameboard[`${kx},${ky}`]); }
+            availableSpecialMoves(x, y, gameboard, deadPile) {
+                const hasDeadPiece = deadPile[this.Color].filter(p => p.type !== KING).length > 0;
+                if (!hasDeadPiece) return [];
+                return kingList(x, y).filter(([kx, ky]) => !gameboard[`${kx},${ky}`]);
+            }
+        }
+
+        class Oliphaunt extends Piece {
+            constructor(color) { super(color, OLIPHAUNT); }
+            availableMoves(x, y, gameboard, Color = this.Color) { return this.AdNauseum(x, y, gameboard, Color, chessCardinals); }
+            getKamikazePath(x, y, gameboard) { return kingList(x, y).filter(([kx, ky]) => gameboard[`${kx},${ky}`]); }
+            availableSpecialMoves(x, y, gameboard) {
+                return knightList(x, y).filter(([kx, ky]) => {
+                    const target = gameboard[`${kx},${ky}`];
+                    return target && target.Color !== this.Color; 
+                });
+            }
+        }
+
+        class Missionary extends Piece {
+            constructor(color) { super(color, MISSIONARY); }
+            availableMoves(x, y, gameboard, Color = this.Color) {
+                const bishopMoves = this.AdNauseum(x, y, gameboard, Color, chessDiagonals);
+                const knightMoves = knightList(x, y).filter(([xx, yy]) => {
+                    const isMergeTarget = getMergeTargetsFn(this, [[xx, yy]], gameboard).length > 0;
+                    if (isMergeTarget) return true;
+                    return this.noConflict(gameboard, Color, xx, yy);
+                });
+                const uniqueMoves = new Set([...bishopMoves, ...knightMoves].map(arr => arr.join(',')));
+                return Array.from(uniqueMoves).map(str => str.split(',').map(Number));
+            }
+            getKamikazePath(x, y, gameboard) { return kingList(x, y).filter(([kx, ky]) => gameboard[`${kx},${ky}`]); }
+            availableSpecialMoves(x, y, gameboard) {
+                if (this.usedSpecialAbility) return [];
+                const finalMoves = [];
+                const game = gameboard;
+                const color = this.Color;
+                
+                this.AdNauseum(x, y, game, color, chessDiagonals).forEach(([x1, y1]) => {
+                    knightList(x1, y1).forEach(([x2, y2]) => {
+                        if (this.noConflict(game, color, x2, y2)) finalMoves.push([x2, y2, 'BN']); 
+                    });
+                });
+                
+                knightList(x, y).forEach(([x1, y1]) => {
+                    this.AdNauseum(x1, y1, game, color, chessDiagonals).forEach(([x2, y2]) => {
+                        if (this.noConflict(game, color, x2, y2)) finalMoves.push([x2, y2, 'NB']); 
+                    });
+                });
+
+                const uniqueMoves = new Set(finalMoves.map(arr => arr.slice(0, 2).join(',')));
+                return Array.from(uniqueMoves).map(str => str.split(',').map(Number));
+            }
+        }
+
+        const PieceClassMap = { Rook, Bishop, Knight, Queen, King, Pawn, Cathedral, Oliphaunt, Missionary }; 
+
+        // --- Game Class ---
+        class Game {
+            constructor() {
+                this.playersturn = WHITE;
+                this.message = "White's turn to move. Select a piece.";
+                this.gameboard = {}; 
+                this.selectedPos = null; 
+                this.availableMoves = []; 
+                this.mergeTargets = []; 
+                this.deadPile = { [WHITE]: [], [BLACK]: [] }; 
+                this.garrisonedPawns = { [WHITE]: [], [BLACK]: [] }; 
+                this.isGameOver = false;
+                
+                this.gameMode = 'MOVE'; 
+                this.abilityType = null; 
+                this.resurrectionCandidate = null; 
+                this.tempGarrisonTargets = []; 
+                this.pawnPromotionTarget = null;
+                this.isKamikaze = false;
+                
+                // Missionary Double Move State
+                this.missionaryMoveType = null; // Tracks the type of the first move (BISHOP or KNIGHT)
+                
+                // Knight Double Jump State Variables
+                this.knightStartPos = null; // Original position before Jump 1
+                this.knightTempJumpPos = null; // Current position of the Knight (Jump 1 Dest or Path Step location)
+                this.knightTargetPos = null; // Target destination of the current L-move (Jump 1 or Jump 2)
+                this.possibleLPaths = {}; // Stores { 'x,y': fullPathArray } for path step 1/3 selection
+                this.currentLPath = null; // The chosen path: [ [sX, sY], [i1X, i1Y], [i2X, i2Y], [dX, dY] ]
+                this.currentLPathStep = 0; // Tracks which path step the player is on (1, 2, 3, 4, 5, 6, 7, 8)
+                this.trampleTargetPos = null; // Used for modal confirmation
+                this.trampledPieces = []; // List of pieces captured by trampling
+
+                this.setupEventListeners();
+                this.placePieces();
+                this.drawBoard();
+                this.updateStatus();
+                this.updateControls();
+                this.updateDeadPile();
+                
+                this.showInfoModal(); 
+            }
+            
+            // --- CRITICAL HELPERS (Arrow Functions) ---
+
+            endGame = (winnerColor) => {
+                this.isGameOver = true;
+                this.message = `${winnerColor.toUpperCase()} WINS!`;
+                document.getElementById('game-over-message').textContent = `${winnerColor.toUpperCase()} WINS!`;
+                document.getElementById('game-over-modal').style.display = 'block';
+                this.updateControls();
+            }
+
+            newGame = () => {
+                this.gameboard = {};
+                this.deadPile = { [WHITE]: [], [BLACK]: [] };
+                this.garrisonedPawns = { [WHITE]: [], [BLACK]: [] };
+                this.isGameOver = false;
+                this.playersturn = WHITE;
+                this.resetMode(); 
+                this.placePieces();
+                this.drawBoard();
+                document.getElementById('game-over-modal').style.display = 'none';
+                this.message = "New Game Started. White's turn.";
+                this.updateStatus();
+            }
+
+            resetHighlighting = () => {
+                document.querySelectorAll('.square').forEach(el => {
+                    el.classList.remove('selected', 'highlight-move', 'highlight-special', 'highlight-kamikaze-path', 'merge-target', 'highlight-knight-destination', 'knight-path-step', 'knight-path-corner');
+                    
+                    // Remove the Trample marker text and reset content/styles
+                    el.innerHTML = el.innerHTML.replace(/<span style=".*?">TRAMPLE\?<\/span>/g, '');
+                    el.style.border = ''; // Clear inline border styles
+                    el.style.borderTop = '';
+                    el.style.borderBottom = '';
+                    el.style.borderLeft = '';
+                    el.style.borderRight = '';
+                });
+                document.querySelectorAll('.knight-arrow').forEach(e => e.remove());
+            }
+
+            resetSelection = () => {
+                this.selectedPos = null;
+                this.availableMoves = [];
+                this.mergeTargets = [];
+                this.resetHighlighting();
+            }
+            
+            resetMode = () => {
+                this.gameMode = 'MOVE';
+                this.abilityType = null;
+                this.resurrectionCandidate = null;
+                this.availableMoves = [];
+                this.mergeTargets = [];
+                this.tempGarrisonTargets = [];
+                this.pawnPromotionTarget = null;
+                this.isKamikaze = false;
+                this.missionaryMoveType = null; // Reset Missionary state
+                
+                // Knight Double Jump State Reset
+                this.knightStartPos = null;
+                this.knightTempJumpPos = null;
+                this.knightTargetPos = null;
+                this.possibleLPaths = {};
+                this.currentLPath = null;
+                this.currentLPathStep = 0;
+                this.trampleTargetPos = null;
+                this.trampledPieces = [];
+                
+                document.getElementById('kamikaze-complete-modal').style.display = 'none'; // Hide new modal on reset
+                
+                this.resetHighlighting();
+                this.updateControls();
+                this.message = `${this.playersturn}'s turn. Select a piece.`;
+                this.updateStatus();
+                document.getElementById('finish-garrison-btn').style.display = 'none';
+                document.getElementById('trample-modal').style.display = 'none';
+            }
+            
+            setupEventListeners = () => {
+                document.getElementById('special-btn').onclick = () => this.enterAbilityMode('SPECIAL');
+                document.getElementById('kamikaze-btn').onclick = () => this.enterAbilityMode('KAMIKAZE');
+                document.getElementById('cancel-btn').onclick = () => this.resetMode();
+                document.getElementById('finish-garrison-btn').onclick = () => {
+                    if (this.gameMode === 'GARRISON_SELECT' || this.gameMode === 'DEPLOY_SELECT') {
+                        this.switchTurn();
+                        this.resetMode();
+                    }
+                };
+                document.getElementById('new-game-btn').onclick = () => this.newGame();
+                
+                const modal = document.getElementById('info-modal');
+                const closeBtn = document.querySelector('#info-modal .close-button');
+                const gameOverModal = document.getElementById('game-over-modal');
+                
+                document.getElementById('info-btn').onclick = () => this.showInfoModal();
+                closeBtn.onclick = () => modal.style.display = 'none';
+                document.getElementById('game-over-close').onclick = () => gameOverModal.style.display = 'none';
+
+                window.onclick = (event) => {
+                    if (event.target == modal) modal.style.display = 'none';
+                    if (event.target == gameOverModal) gameOverModal.style.display = 'none';
+                };
+                
+                // Trample confirmation listeners
+                document.getElementById('trample-confirm-btn').onclick = () => this.handleTrampleConfirmation(true);
+                document.getElementById('trample-cancel-btn').onclick = () => this.handleTrampleConfirmation(false);
+                
+                // NEW: Kamikaze detonation listener
+                document.getElementById('kamikaze-detonate-btn').onclick = () => this.finalizeKamikazeSuicide();
+            }
+
+            // --- UI/Data Display Methods ---
+
+            showInfoModal = () => {
+                const modal = document.getElementById('info-modal');
+                const infoContent = document.getElementById('info-content');
+                
+                const [sx, sy] = this.selectedPos || [null, null];
+                const piece = this.selectedPos ? this.gameboard[`${sx},${sy}`] : null;
+
+                if (piece) infoContent.innerHTML = this.generatePieceInfo(piece);
+                else infoContent.innerHTML = `<p>Select a piece on the board and click this button again to see its specific rules, or see general rules below.</p><p><hr><h3>General Mega Chess Rules</h3>${this.generateGeneralRules()}</p>`;
+
+                modal.style.display = 'block';
+            }
+            
+            generatePieceInfo = (piece) => {
+                const generalRules = this.generateGeneralRules();
+                const usedMarker = piece.usedSpecialAbility ? ' (USED)' : '';
+                const basePieces = this.getComponentPieces(piece.type);
+                
+                let info = `<h3>${piece.Color} ${piece.type} (${piece.name})</h3><p><strong>Movement:</strong> ${this.getMovementDescription(piece.type)}</p>`;
+                if (basePieces.length > 0) info += `<p><strong>Composition:</strong> Merged from: ${basePieces.join(' and ')}.</p>`;
+                
+                info += `<h4>Special Ability${piece.type === KING || piece.type === PAWN || piece.type === CATHEDRAL || piece.type === OLIPHAUNT ? ' (Unlimited)' : ' (One-Time' + usedMarker + ')'}</h4>${this.getSpecialAbilityDescription(piece.type)}
+                    <h4>Kamikaze (Suicide Attack)</h4>${this.getKamikazeDescription(piece.type)}
+                    <hr><h3>General Mega Chess Rules</h3>${generalRules}`;
+                return info;
+            }
+            
+            generateGeneralRules = () => `<ul>
+                <li>**Merging:** Knight+Rook=Oliphaunt, Knight+Bishop=Missionary, Rook+Bishop=Cathedral.</li>
+                <li>**Kamikaze:** Must be adjacent to the King (except Pawn). Destroys all pieces on path/target area, stops before King. Kamikaze piece is destroyed.</li>
+                <li>**Capture Reversion:** Merged pieces revert to components upon capture.</li>
+                <li>**Tracking:** Queen, Rook, Bishop, Knight, Missionary have **one-time** special abilities.</li>
+            </ul>`;
+
+            getComponentPieces = (type) => {
+                switch (type) {
+                    case CATHEDRAL: return [ROOK, BISHOP];
+                    case OLIPHAUNT: return [ROOK, KNIGHT];
+                    case MISSIONARY: return [BISHOP, KNIGHT];
+                    default: return [];
+                }
+            }
+            
+            getMovementDescription = (type) => {
+                switch (type) {
+                    case PAWN: return "One square forward (two on first). Captures diagonally. Cannot move into blocking pieces.";
+                    case ROOK: return "Any squares along ranks/files.";
+                    case KNIGHT: return "L-shape jump.";
+                    case BISHOP: return "Any squares diagonally.";
+                    case QUEEN: return "Any squares along ranks, files, or diagonals.";
+                    case KING: return "One square in any direction.";
+                    case OLIPHAUNT: return "Any squares along ranks and files (Rook move).";
+                    case CATHEDRAL: return "Cannot move (Immobile).";
+                    case MISSIONARY: return "Bishop or Knight move.";
+                    default: return "Standard Chess Movement.";
+                }
+            }
+
+            getSpecialAbilityDescription = (type) => {
+                switch (type) {
+                    case PAWN: return "V-formation move (3, 5, or 7 pawns) one rank forward, capturing piece one rank ahead of lead pawn. All pawns must be unblocked.";
+                    case KING: return "Spawn new Pawn in adjacent, empty square in defensive half.";
+                    case ROOK: return "Garrison adjacent friendly Pawns (1-time). Deploy one garrisoned Pawn to adjacent square or use to Attack diagonal enemy piece (unlimited deploy).";
+                    case BISHOP: return "Resurrect one dead non-Pawn, non-King piece, placing it on an empty adjacent square (1-time).";
+                    case KNIGHT: return "Double Jump (2 L-moves). First move must be empty. Tramples enemy Pawns on both L-paths (1-time).";
+                    case QUEEN: return "Swing Axe: kill all enemy pieces in the 8 adjacent squares (1-time).";
+                    case OLIPHAUNT: return "Ranged Attack (Snipe): kill any enemy piece on a Knight-move square (unlimited).";
+                    case CATHEDRAL: return "Resurrect any dead non-King piece onto an empty adjacent square (unlimited).";
+                    case MISSIONARY: return "Double Move (Bishop->Knight or Knight->Bishop). Captures on intermediate and final squares (1-time).";
+                    default: return "No special ability.";
+                }
+            }
+
+            getKamikazeDescription = (type) => {
+                switch (type) {
+                    case PAWN: return "V-formation moves two squares forward, killing all pieces in path. Pawns and King must be in alignment.";
+                    case ROOK: return "Kills all pieces in a straight rank or file line (stops at King).";
+                    case KNIGHT: return "Suicidal Double Jump. Kills all pieces on the two L-paths and final square.";
+                    case BISHOP: return "Kills all pieces in a straight diagonal line (stops at King).";
+                    case QUEEN: return "Explodes, killing all pieces in all 8 directions (stops at King).";
+                    case KING: return "The King cannot Kamikaze.";
+                    case OLIPHAUNT: return "Area attack: Destroys everything reachable by a Rook + Knight (T-shape). Stops at King.";
+                    case CATHEDRAL: return "Explodes, resurrecting up to 9 dead non-King pieces into surrounding squares.";
+                    case MISSIONARY: return "Suicidal Double Move (like special ability). Kills all pieces on intermediate and final square.";
+                    default: return "Kamikaze not defined.";
+                }
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            getAbilityType = (pieceType) => {
+                const [sx, sy] = this.selectedPos;
+                const piece = this.gameboard[`${sx},${sy}`];
+                switch (pieceType) {
+                    case KING: return 'PAWN_SPAWN';
+                    case QUEEN: return 'QUEEN_KILL';
+                    case ROOK: return piece.garrisonedPawns > 0 ? 'ROOK_DEPLOY' : 'ROOK_GARRISON';
+                    case BISHOP: return 'BISHOP_RESURRECT';
+                    case KNIGHT: return 'KNIGHT_DOUBLE_JUMP';
+                    case OLIPHAUNT: return 'OLIPHAUNT_RANGED_ATTACK';
+                    case CATHEDRAL: return 'CATHEDRAL_RESURRECT';
+                    case MISSIONARY: return 'MISSIONARY_DOUBLE_MOVE';
+                    case PAWN: return 'PAWN_VFORM_MOVE';
+                    default: return null;
+                }
+            }
+            
+            selectPiece = (x, y) => {
+                const piece = this.gameboard[`${x},${y}`];
+                this.resetSelection();
+                
+                if (piece && piece.Color === this.playersturn) {
+                    this.selectedPos = [x, y];
+                    
+                    this.availableMoves = piece.availableMoves(x, y, this.gameboard);
+                    this.mergeTargets = getMergeTargetsFn(piece, knightList(x, y).concat(this.availableMoves), this.gameboard);
+                    
+                    document.querySelector(`[data-x="${x}"][data-y="${y}"]`)?.classList.add('selected');
+                    
+                    this.availableMoves.forEach(([mx, my]) => {
+                        const isMoveOrCapture = !this.gameboard[`${mx},${my}`] || this.gameboard[`${mx},${my}`].Color !== this.playersturn;
+                        const isMerge = this.mergeTargets.some(t => t[0] === mx && t[1] === my);
+                        const el = document.querySelector(`[data-x="${mx}"][data-y="${my}"]`);
+                        
+                        if (el) {
+                            if (isMerge) el.classList.add('merge-target');
+                            // Only highlight non-merge squares if it's a regular move/capture target
+                            else if (isMoveOrCapture) el.classList.add('highlight-move');
+                        }
+                    });
+                    
+                    this.mergeTargets.forEach(([mx, my]) => {
+                        const el = document.querySelector(`[data-x="${mx}"][data-y="${my}"]`);
+                        if (el) el.classList.add('merge-target');
+                    });
+                    
+                    this.message = `Selected ${piece.type} at ${String.fromCharCode(97 + x)}${y + 1}.`;
+                } else {
+                    this.message = `It's ${this.playersturn}'s turn. Select a piece.`;
+                }
+                this.updateControls();
+                this.updateStatus();
+            }
+
+            placePieces = () => {
+                const whiteBackRank = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]; 
+                const blackBackRank = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook];
+                
+                for (let i = 0; i < 8; i++) {
+                    this.gameboard[`${i},1`] = new Pawn(WHITE, 1);
+                    this.gameboard[`${i},6`] = new Pawn(BLACK, -1);
+                }
+                
+                for (let i = 0; i < 8; i++) {
+                    this.gameboard[`${i},0`] = new whiteBackRank[i](WHITE);
+                    this.gameboard[`${i},7`] = new blackBackRank[i](BLACK); 
+                }
+            }
+            
+            // --- MAIN CLICK HANDLER ---
+
+            handleSquareClick = (x, y) => {
+                if (this.isGameOver) return;
+                
+                const clickedPosKey = `${x},${y}`;
+                const clickedPiece = this.gameboard[clickedPosKey];
+                const [sx_current, sy_current] = this.selectedPos || [null, null];
+                
+                let actionTaken = false;
+
+                const isValidTarget = this.availableMoves.some(([mx, my]) => mx === x && my === y);
+                const isKnightJumpMode = this.gameMode.includes('KNIGHT_JUMP') || this.gameMode.includes('KNIGHT_PATH');
+                const isKamikazeJumpMode = this.gameMode.includes('KAMIKAZE_JUMP') || this.gameMode.includes('KAMIKAZE_PATH');
+                
+                // --- 1. KNIGHT DOUBLE JUMP/KAMIKAZE FLOW (8 Clicks) ---
+                if (isKnightJumpMode || isKamikazeJumpMode) {
+
+                    // Step 1 or 5: Select L-Destination (Blue)
+                    if ((this.gameMode === 'KNIGHT_JUMP_1' || this.gameMode === 'KAMIKAZE_JUMP_1' || this.gameMode === 'KNIGHT_JUMP_2' || this.gameMode === 'KAMIKAZE_JUMP_2') && isValidTarget) {
+                        this.knightTargetPos = [x, y]; 
+                        this.possibleLPaths = this.getJumpPathOptions(sx_current, sy_current, x, y);
+                        
+                        // Check if it's the first jump (Click 1) or second jump (Click 5)
+                        const nextStepNum = this.gameMode.includes('JUMP_1') || this.gameMode.includes('KNIGHT_JUMP_1') ? 1 : 4;
+                        this.enterPathStepMode(nextStepNum); // Advance to Path step 1 or 3
+                    } 
+                    // Step 4 or 8: Confirm Jump (Blue)
+                    // FIXED: Changed includes('KNIGHT_...') to check for mode ending with the action suffix.
+                    else if ((this.gameMode.endsWith('_JUMP_1_CONFIRM') || this.gameMode.endsWith('_JUMP_2_COMPLETE')) && isValidTarget) {
+                        // The next state function handles the move execution/transition
+                        this.handlePathStepSelection(x, y, this.currentLPathStep - 1);
+                        // The turn passes/ends inside knightContinueMove/executeKnightKamikaze. 
+                        // We check actionTaken=true to pass the turn if no special logic ends it (standard move flow only)
+                    }
+                    // Step 2, 3, 6, 7: Path Selection (Orange)
+                    else if ((this.gameMode.includes('KNIGHT_PATH') || this.gameMode.includes('KAMIKAZE_PATH')) && isValidTarget) {
+                         // Current step number is tracked in currentLPathStep
+                        const pathIndex = this.currentLPathStep - 1; 
+                        this.handlePathStepSelection(x, y, pathIndex); 
+                    }
+                    // FIX: Explicit Misclick Handling (replaces the old reset/deselect logic)
+                    else {
+                        this.message = "Misclick: You must select an orange path square or the blue destination square. Click CANCEL to abort ability.";
+                        this.updateStatus();
+                        return;
+                    }
+                }
+
+                // --- 2. MISSIONARY DOUBLE MOVE FLOW (2 Clicks) ---
+                else if (this.gameMode === 'MISSIONARY_JUMP_1' && isValidTarget) {
+                    const [startX, startY] = this.selectedPos;
+                    const endX = x;
+                    const endY = y;
+                    const missionary = this.gameboard[`${startX},${startY}`];
+                    
+                    // Determine which move type was chosen (Bishop or Knight)
+                    // Note: movePiece handles capture and piece relocation
+                    const isKnightMove = knightList(startX, startY).some(([kx, ky]) => kx === endX && ky === endY);
+                    
+                    this.missionaryMoveType = isKnightMove ? KNIGHT : BISHOP;
+
+                    // 1. Execute the first move (physical move and capture)
+                    this.movePiece(startX, startY, endX, endY);
+                    if (this.isGameOver) return; 
+                    
+                    // *** FIX: Update selectedPos to the piece's new location ***
+                    this.selectedPos = [endX, endY];
+
+                    // 2. Set new state
+                    this.gameMode = 'MISSIONARY_JUMP_2';
+                    this.resetHighlighting(); 
+                    document.querySelector(`[data-x="${endX}"][data-y="${endY}"]`)?.classList.add('selected');
+                    
+                    // 3. Calculate second move (opposite type)
+                    this.availableMoves = this._calculateMissionarySecondMoves(endX, endY, this.missionaryMoveType, this.gameboard, missionary.Color);
+                    
+                    const moveTypeDesc = isKnightMove ? 'Bishop' : 'Knight';
+                    this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-special'));
+                    this.message = `MISSIONARY DOUBLE MOVE (2/2): Select a destination for the final ${moveTypeDesc} move.`;
+                    
+                    actionTaken = false; // Do not switch turn yet
+                }
+                
+                else if (this.gameMode === 'MISSIONARY_JUMP_2' && isValidTarget) {
+                    const [startX, startY] = this.selectedPos;
+                    const endX = x;
+                    const endY = y;
+                    const missionary = this.gameboard[`${startX},${startY}`]; // Missionary is now correctly retrieved
+
+                    // 1. Execute the second move (physical move and capture)
+                    this.movePiece(startX, startY, endX, endY);
+                    if (this.isGameOver) return; 
+                    
+                    // 2. Finalize ability
+                    missionary.usedSpecialAbility = true;
+                    this.message = `Missionary executed Double Move!`;
+                    
+                    actionTaken = true; // Complete and switch turn
+                }
+
+
+                // --- 3. SINGLE-STEP & BASE MOVE/MERGE ---
+                
+                else if (this.gameMode === 'KAMIKAZE' && isValidTarget) {
+                    // Non-Knight Kamikaze logic is executed here
+                    this.executeKamikazeMove(x, y);
+                    actionTaken = true;
+                } else if (this.gameMode === 'RESURRECT_PLACE' && this.resurrectionCandidate && isValidTarget) {
+                    this.executeResurrect(x, y, this.resurrectionCandidate.piece);
+                    actionTaken = true;
+                } else if (this.gameMode === 'GARRISON_SELECT' && isValidTarget && clickedPiece && clickedPiece.type === PAWN && clickedPiece.Color === this.playersturn) {
+                    this.executeRookGarrison(sx_current, sy_current, x, y);
+                    const rook = this.gameboard[`${sx_current},${sy_current}`];
+                    this.tempGarrisonTargets = rook.getGarrisonTargets(sx_current, sy_current, this.gameboard);
+                    this.availableMoves = this.tempGarrisonTargets.map(m => m.slice(0, 2));
+                    this.resetHighlighting();
+                    document.querySelector(`[data-x="${sx_current}"][data-y="${sy_current}"]`)?.classList.add('selected');
+                    this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-special'));
+                    this.message = `Garrisoned 1 pawn. Click another or FINISH GARRISON. Remaining: ${this.tempGarrisonTargets.length}`;
+                    this.updateControls();
+                } else if (this.gameMode === 'DEPLOY_SELECT' && isValidTarget) {
+                    const rook = this.gameboard[`${sx_current},${sy_current}`];
+                    const targetInfo = rook.availableSpecialMoves(sx_current, sy_current, this.gameboard).find(([mx, my]) => mx === x && my === y);
+                    if (targetInfo[2] === 'DEPLOY') this.executeRookDeploy(sx_current, sy_current, x, y);
+                    else if (targetInfo[2] === 'ATTACK') this.executeRookDeployAttack(sx_current, sy_current, x, y);
+                    actionTaken = true;
+                } else if (this.gameMode === 'SPECIAL' && isValidTarget) {
+                    this.executeSpecialAbility(sx_current, sy_current, x, y);
+                    actionTaken = true;
+                }
+                
+                // --- BASE MOVE/MERGE MODE Handlers ---
+                else if (this.gameMode === 'MOVE') {
+                    if (this.selectedPos) {
+                        const isMoveOrMerge = this.availableMoves.some(([mx, my]) => mx === x && my === y);
+                        
+                        if (isMoveOrMerge) {
+                            if (clickedPiece && clickedPiece.Color === this.playersturn) {
+                                this.executeMerge(sx_current, sy_current, x, y, clickedPiece);
+                            } else {
+                                this.movePiece(sx_current, sy_current, x, y);
+                                const piece = this.gameboard[clickedPosKey];
+                                if (piece instanceof Pawn && (piece.Color === WHITE && y === 7 || piece.Color === BLACK && y === 0)) {
+                                    this.pawnPromotionTarget = [x, y];
+                                    this.showPromotionModal();
+                                    return; 
+                                }
+                            }
+                            actionTaken = true;
+                        } else if (clickedPiece && clickedPiece.Color === this.playersturn) {
+                            this.selectPiece(x, y);
+                        } else {
+                            if (sx_current !== x || sy_current !== y) this.message = "Invalid move or target. Deselecting.";
+                            this.resetSelection();
+                        }
+                    } else if (clickedPiece && clickedPiece.Color === this.playersturn) {
+                        this.selectPiece(x, y);
+                    } else {
+                        this.message = `It's ${this.playersturn}'s turn. Select a piece.`;
+                    }
+                }
+                
+                if (actionTaken && !this.isGameOver) {
+                    this.switchTurn();
+                    this.resetMode();
+                }
+
+                this.updateStatus();
+                this.updateControls();
+            }
+
+            drawBoard = () => {
+                const boardEl = document.getElementById('chessboard');
+                boardEl.innerHTML = '';
+
+                for (let y = 7; y >= 0; y--) {
+                    for (let x = 0; x < 8; x++) {
+                        const key = `${x},${y}`;
+                        const piece = this.gameboard[key];
+                        
+                        const squareEl = document.createElement('div');
+                        squareEl.classList.add('square');
+                        squareEl.classList.add((x + y) % 2 === 0 ? 'light' : 'dark');
+                        squareEl.dataset.x = x;
+                        squareEl.dataset.y = y;
+                        
+                        // FIX: handleSquareClick is now defined as a property on `this` before drawBoard is called.
+                        squareEl.onclick = (e) => this.handleSquareClick(x, y, e);
+
+                        if (piece) squareEl.innerHTML = piece.toString();
+                        boardEl.appendChild(squareEl);
+                    }
+                }
+            }
+            
+            updateDeadPile = () => {
+                const deadWhiteEl = document.getElementById('dead-white');
+                const deadBlackEl = document.getElementById('dead-black');
+                const deadPieces = this.deadPile;
+                const turn = this.playersturn;
+                
+                deadWhiteEl.innerHTML = '';
+                deadBlackEl.innerHTML = '';
+
+                const renderDeadPile = (pile, element, isCurrentPlayer) => {
+                    pile.forEach((p, index) => {
+                        const pieceEl = document.createElement('span');
+                        pieceEl.className = 'dead-piece';
+                        pieceEl.textContent = p.name;
+                        
+                        if (isCurrentPlayer && this.gameMode === 'RESURRECT_PIECE') {
+                            const isKing = p.type === KING;
+                            const isPawn = p.type === PAWN;
+                            const isBishopRes = this.abilityType === 'BISHOP_RESURRECT';
+                            const canBeResurrected = !isKing && ((isBishopRes && !isPawn) || !isBishopRes);
+                            
+                            if (canBeResurrected) {
+                                pieceEl.classList.add('dead-piece-selectable');
+                                pieceEl.onclick = () => this.selectResurrectionPiece(p, index);
+                            }
+                        }
+                        element.appendChild(pieceEl);
+                    });
+                };
+
+                renderDeadPile(deadPieces[BLACK], deadWhiteEl, BLACK === turn);
+                renderDeadPile(deadPieces[WHITE], deadBlackEl, WHITE === turn);
+            }
+
+            updateStatus = () => {
+                document.getElementById('status-message').textContent = this.message;
+            }
+            
+            updateControls = () => {
+                const [sx, sy] = this.selectedPos || [null, null];
+                const selectedPiece = this.selectedPos ? this.gameboard[`${sx},${sy}`] : null;
+                const turn = this.playersturn;
+                
+                document.getElementById('cancel-btn').disabled = (this.gameMode === 'MOVE');
+                
+                const inRookMode = (this.gameMode === 'GARRISON_SELECT' || this.gameMode === 'DEPLOY_SELECT');
+                document.getElementById('finish-garrison-btn').style.display = inRookMode ? 'block' : 'none';
+                document.getElementById('finish-garrison-btn').disabled = false; 
+
+                const canUseSpecial = selectedPiece && selectedPiece.availableSpecialMoves(sx, sy, this.gameboard, this.deadPile).length > 0;
+                
+                document.getElementById('special-btn').disabled = !canUseSpecial || this.gameMode !== 'MOVE';
+
+                const isPawn = selectedPiece && selectedPiece.type === PAWN;
+                const canKamikaze = selectedPiece && !isPawn && isAdjacentToKing(sx, sy, this.gameboard, turn);
+                document.getElementById('kamikaze-btn').disabled = !canKamikaze || this.gameMode !== 'MOVE';
+                
+                if (this.isGameOver) {
+                    document.getElementById('special-btn').disabled = true;
+                    document.getElementById('kamikaze-btn').disabled = true;
+                    document.getElementById('cancel-btn').disabled = true;
+                }
+            }
+
+
+            enterAbilityMode = (mode) => {
+                if (!this.selectedPos || this.isGameOver) {
+                    this.message = "Select a piece first to use an ability.";
+                    this.updateStatus();
+                    return;
+                }
+                
+                const [sx, sy] = this.selectedPos;
+                const piece = this.gameboard[`${sx},${sy}`];
+                
+                this.resetHighlighting();
+                document.querySelector(`[data-x="${sx}"][data-y="${sy}"]`)?.classList.add('selected');
+
+                if (mode === 'KAMIKAZE') {
+                    const isKnight = piece.type === KNIGHT;
+                    this.gameMode = isKnight ? 'KAMIKAZE_JUMP_1' : 'KAMIKAZE';
+                    this.abilityType = 'KAMIKAZE';
+                    this.isKamikaze = true;
+                    
+                    if (isKnight) {
+                        this.knightStartPos = [sx, sy]; 
+                        this.knightTempJumpPos = [sx, sy];
+                        this.availableMoves = knightList(sx, sy); 
+                        
+                        // Highlight all possible jump destinations
+                        this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-knight-destination'));
+                        this.message = "KNIGHT KAMIKAZE (1/8): Select the square for your first L-move destination (blue).";
+                    } else {
+                        this.availableMoves = piece.getKamikazePath(sx, sy, this.gameboard);
+                        this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-kamikaze-path'));
+                        this.message = "KAMIKAZE MODE: Click a highlighted piece/square to detonate.";
+                    }
+
+                } else if (mode === 'SPECIAL') {
+                    this.isKamikaze = false;
+                    const specialMoves = piece.availableSpecialMoves(sx, sy, this.gameboard, this.deadPile);
+                    
+                    if (specialMoves.length === 0) {
+                        this.message = `${piece.type} has no available special moves right now or has already used it.`;
+                        return;
+                    }
+
+                    this.availableMoves = specialMoves.map(m => m.slice(0, 2)); 
+                    this.abilityType = this.getAbilityType(piece.type);
+
+                    if (this.abilityType === 'ROOK_GARRISON') {
+                        this.gameMode = 'GARRISON_SELECT';
+                        this.tempGarrisonTargets = specialMoves;
+                        // FIX: Changed highlight-action-target to highlight-special
+                        this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-special'));
+                        this.message = `GARRISON MODE: Click pawns to take on board, then click FINISH GARRISON.`;
+                    } else if (this.abilityType === 'ROOK_DEPLOY') {
+                        this.gameMode = 'DEPLOY_SELECT';
+                         // FIX: Changed highlight-action-target to highlight-special
+                        this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-special'));
+                        this.message = `DEPLOY MODE: Click an empty square (deploy) or an enemy diagonal (attack).`;
+                    } else if (['BISHOP_RESURRECT', 'CATHEDRAL_RESURRECT'].includes(this.abilityType)) {
+                        this.gameMode = 'RESURRECT_PIECE';
+                        this.message = `RESURRECT MODE: Select a dead piece of type ${this.abilityType === 'BISHOP_RESURRECT' ? 'non-pawn, non-king' : 'non-king'} from the Dead Pile.`;
+                        this.updateDeadPile(); 
+                    } else if (this.abilityType === 'PAWN_VFORM_MOVE') {
+                         const moveInfo = specialMoves[0];
+                         this.executePawnFormationMove(sx, sy, moveInfo[4][0], moveInfo[4][1], moveInfo[2], moveInfo[3]);
+                         this.switchTurn();
+                         this.resetMode();
+                    } else if (this.abilityType === 'KNIGHT_DOUBLE_JUMP') {
+                         this.gameMode = 'KNIGHT_JUMP_1';
+                         this.knightStartPos = [sx, sy]; 
+                         this.knightTempJumpPos = [sx, sy];
+                         
+                         // Highlight all possible jump destinations (only valid L-moves)
+                         this.availableMoves = knightList(sx, sy);
+                         
+                         // FIX: Use piece.noConflict instead of this.noConflict
+                         const selectedPiece = this.gameboard[`${sx},${sy}`]; // Need to fetch the piece reference here
+                         this.availableMoves = this.availableMoves.filter(([mx, my]) => selectedPiece.noConflict(this.gameboard, selectedPiece.Color, mx, my));
+
+                         this.availableMoves.forEach(([mx, my]) => {
+                             document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-knight-destination');
+                         });
+                         this.message = `DOUBLE JUMP (1/8): Select the L-move endpoint (blue highlight) for JUMP 1 Destination.`;
+                    } else if (this.abilityType === 'MISSIONARY_DOUBLE_MOVE') {
+                         this.gameMode = 'MISSIONARY_JUMP_1';
+                         
+                         // Calculate all possible moves (Bishop + Knight)
+                         const bishopMoves = piece.AdNauseum(sx, sy, this.gameboard, piece.Color, chessDiagonals);
+                         const knightMoves = knightList(sx, sy).filter(([mx, my]) => piece.noConflict(this.gameboard, piece.Color, mx, my));
+                         
+                         // Combine and remove duplicates
+                         const allFirstMoves = new Set([...bishopMoves.map(arr => arr.join(',')), ...knightMoves.map(arr => arr.join(','))]);
+                         this.availableMoves = Array.from(allFirstMoves).map(str => str.split(',').map(Number));
+                         
+                         // FIX: Changed highlight-action-target to highlight-special
+                         this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-special'));
+                         this.message = `MISSIONARY DOUBLE MOVE (1/2): Select a destination for the Bishop or Knight move!`;
+                    } else {
+                        this.gameMode = 'SPECIAL'; 
+                         // FIX: Changed highlight-action-target to highlight-special
+                        this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-special'));
+                        this.message = `SPECIAL ABILITY (${piece.type}): Click a highlighted square to execute the ability.`;
+                    }
+                }
+                
+                this.updateControls();
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            selectResurrectionPiece = (piece, index) => {
+                const [sx, sy] = this.selectedPos;
+                const attackingPiece = this.gameboard[`${sx},${sy}`];
+                
+                if (piece.Color !== this.playersturn) return;
+
+                this.resurrectionCandidate = { piece: piece, index: index };
+                
+                this.availableMoves = attackingPiece.availableSpecialMoves(sx, sy, this.gameboard, this.deadPile).filter(m => !this.gameboard[`${m[0]},${m[1]}`]);
+                
+                this.resetHighlighting();
+                document.querySelector(`[data-x="${sx}"][data-y="${sy}"]`)?.classList.add('selected');
+                 // FIX: Changed highlight-action-target to highlight-special
+                this.availableMoves.forEach(([mx, my]) => document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-special'));
+                
+                this.gameMode = 'RESURRECT_PLACE';
+                this.message = `PLACING ${piece.type}: Click a highlighted empty square to place the resurrected piece.`;
+                this.updateDeadPile();
+            }
+            
+            // --- MISSIONARY DOUBLE MOVE HELPERS ---
+            _calculateMissionarySecondMoves = (x, y, firstMoveType, gameboard, color) => {
+                const isKnightFirst = firstMoveType === KNIGHT;
+                // We use a temporary piece instance to calculate moves, but check conflicts against the Missionary's color
+                const tempPiece = new PieceClassMap[isKnightFirst ? BISHOP : KNIGHT](color);
+                
+                if (isKnightFirst) {
+                    // Second move is Bishop (AdNauseum: Diagonal movement)
+                    return tempPiece.AdNauseum(x, y, gameboard, color, chessDiagonals)
+                        .filter(([mx, my]) => tempPiece.noConflict(gameboard, color, mx, my));
+                } else {
+                    // Second move is Knight (knightList)
+                    return knightList(x, y)
+                        .filter(([xx, yy]) => tempPiece.noConflict(gameboard, color, xx, yy));
+                }
+            }
+
+
+            // --- KNIGHT DOUBLE JUMP CORE LOGIC ---
+
+            /**
+             * Generates the two possible 4-square paths for an L-move (Start, Path Step 1, Path Step 2, Dest).
+             * Path Step 1 and Path Step 2 are the two squares adjacent to the L-move rectangle.
+             */
+            getJumpPathOptions = (startX, startY, destX, destY) => {
+                const paths = {};
+                const dx = destX - startX;
+                const dy = destY - startY;
+                const dx_abs = Math.abs(dx);
+                const dy_abs = Math.abs(dy);
+                const dx_sign = Math.sign(dx);
+                const dy_sign = Math.sign(dy);
+
+                if (!((dx_abs === 2 && dy_abs === 1) || (dx_abs === 1 && dy_abs === 2))) return {};
+                
+                // Determine which axis is longer/shorter
+                const isXLong = dx_abs > dy_abs;
+                
+                // --- Path 1 (Long Axis First: 1 Long, 1 Long, 1 Short) ---
+                
+                // I1: 1 unit along the Long axis, 0 units along Short axis (from Start)
+                const p1_i1 = isXLong 
+                    ? [startX + dx_sign, startY] // e.g., b5->c5 (2,4)
+                    : [startX, startY + dy_sign]; // e.g., b5->b6 (1,5)
+                
+                // I2: 2 units along the Long axis, 0 units along Short axis (from Start)
+                // This correction is CRITICAL for the "long axis first" path to point to the correct intermediate square.
+                const p1_i2 = isXLong
+                    ? [startX + dx_sign * 2, startY] // e.g., b5->d5 (3,4)
+                    : [startX, startY + dy_sign * 2]; // e.g., d4->d6 (3,6)
+
+                // Path 1 is: Start -> [Long 1] -> [Long 2] -> Destination
+                const path1 = [ [startX, startY], p1_i1, p1_i2, [destX, destY] ];
+
+                // --- Path 2 (Short Axis First: 1 Short, 1 Corner, 1 Long) ---
+
+                // I1: 1 unit along the Short axis, 0 units along Long axis (from Start)
+                const p2_i1 = isXLong 
+                    ? [startX, startY + dy_sign] // e.g., b5->b6 (1,5)
+                    : [startX + dx_sign, startY]; // e.g., d4->e4 (4,4)
+                
+                // I2: 1 unit along the Long axis, 1 unit along the Short axis (The corner of the L)
+                const p2_i2 = [startX + dx_sign, startY + dy_sign]; // e.g., b5->c6 (2,5) or d4->e5 (4,5)
+
+                // Path 2 is: Start -> [Short 1] -> [Corner] -> Destination
+                const path2 = [ [startX, startY], p2_i1, p2_i2, [destX, destY] ];
+                
+                // We use the first intermediate step (Index 1) as the key
+                if (isInBounds(path1[1][0], path1[1][1])) {
+                     paths[`${path1[1][0]},${path1[1][1]}`] = path1;
+                }
+                if (isInBounds(path2[1][0], path2[1][1])) {
+                     paths[`${path2[1][0]},${path2[1][1]}`] = path2;
+                }
+                
+                return paths;
+            };
+
+            /**
+             * Executes the physical movement of the Knight from start to end, handles capture/king check.
+             * @param {number} startX 
+             * @param {number} startY 
+             * @param {number} endX 
+             * @param {number} endY 
+             * @returns {boolean} True if move completed successfully, false if game ended (King capture).
+             */
+            _performKnightJumpMove = (startX, startY, endX, endY) => {
+                const startKey = `${startX},${startY}`;
+                const endKey = `${endX},${endY}`;
+                const piece = this.gameboard[startKey];
+                
+                if (!piece) {
+                    console.error("Attempting to move piece that doesn't exist.", startX, startY);
+                    this.message = `ERROR: Knight not found at ${String.fromCharCode(97 + startX)}${startY + 1}. Resetting.`;
+                    this.resetMode();
+                    return false;
+                }
+                
+                // 1. Capture at destination (endX, endY)
+                const capturedPiece = this.gameboard[endKey];
+                
+                // ** FIX: ALWAYS capture the enemy piece at the destination. **
+                if (capturedPiece && capturedPiece.Color !== piece.Color) {
+                    if (capturedPiece.type === KING) { this.endGame(piece.Color); return false; }
+                    this.capturePiece(endKey, capturedPiece);
+                }
+                
+                // 2. Move the piece
+                this.gameboard[endKey] = piece;
+                delete this.gameboard[startKey];
+                
+                this.drawBoard();
+                this.selectedPos = [endX, endY]; // Update physical location marker
+                return true;
+            }
+
+            enterPathStepMode = (stepNum) => {
+                // pX, pY here tracks the logical start of the current L-move (either Knight's start or Jump 1 destination)
+                const [pX, pY] = this.knightTempJumpPos; 
+                const [targetX, targetY] = this.knightTargetPos;
+
+                this.resetHighlighting();
+                document.querySelector(`[data-x="${pX}"][data-y="${pY}"]`)?.classList.add('selected');
+                document.querySelector(`[data-x="${targetX}"][data-y="${targetY}"]`)?.classList.add('highlight-knight-destination');
+
+                let availablePath = [];
+
+                if (stepNum === 1 || stepNum === 4) { // Clicks 2 or 6 (Path Choice)
+                    // Step 1/4 (CHOICE): Highlight the two possible squares (index 1 in the full path)
+                    availablePath = Object.values(this.possibleLPaths).map(path => path[1]);
+                    this.message = `DOUBLE JUMP (${stepNum + 1}/8): Click either path corner or adjacent square (orange highlight).`;
+
+                } else if (stepNum === 2 || stepNum === 5) { // Clicks 3 or 7 (Path Follow - Forced)
+                    // Step 2/5 (FORCED): Highlight the second intermediate square (index 2)
+                    if (!this.currentLPath) { this.resetMode(); return; }
+                    availablePath = [this.currentLPath[2]];
+                    this.message = `DOUBLE JUMP (${stepNum + 1}/8): Click the second intermediate square (orange highlight).`;
+                    
+                } else if (stepNum === 3 || stepNum === 6) { // Clicks 4 or 8 (Confirmation/Final Destination - Forced)
+                    // Confirmation steps: Highlight the destination square (index 3)
+                    if (!this.currentLPath) { this.resetMode(); return; }
+                    availablePath = [this.currentLPath[3]];
+                    this.message = `DOUBLE JUMP (${stepNum + 1}/8): Confirm JUMP ${stepNum === 3 ? '1' : '2'}: Click the destination square again (blue).`;
+                }
+
+                this.availableMoves = availablePath;
+                this.currentLPathStep = stepNum + 1;
+
+                // Highlight path steps orange, confirmation blue
+                availablePath.forEach(([mx, my]) => {
+                    const el = document.querySelector(`[data-x="${mx}"][data-y="${my}"]`);
+                    
+                    if (stepNum === 1 || stepNum === 2 || stepNum === 4 || stepNum === 5) { // Path Clicks (Orange)
+                        el?.classList.add('knight-path-step');
+                    } else if (stepNum === 3 || stepNum === 6) { // Confirmation Clicks (Blue)
+                        el?.classList.add('highlight-knight-destination');
+                    }
+                    
+                    // Add Trample marker only on the clickable path squares (Steps 1, 2, 4, 5)
+                    if (stepNum === 1 || stepNum === 2 || stepNum === 4 || stepNum === 5) {
+                        const key = `${mx},${my}`;
+                        const piece = this.gameboard[key];
+                        // Only add trample marker/logic if a piece exists
+                        if (piece) {
+                            if (this.isKamikaze) {
+                                // In Kamikaze, mark all pieces (friend or foe) as subject to auto-capture
+                                el.innerHTML += '<span style="font-size: 8px; position: absolute; top: 0; left: 0; color: black; font-weight: bold;">KAMIKAZE</span>';
+                            } else if (piece.Color !== this.playersturn && piece.type === PAWN) {
+                                // In regular double jump, only enemy pawns trample and prompt
+                                el.innerHTML += '<span style="font-size: 8px; position: absolute; top: 0; left: 0; color: black; font-weight: bold;">TRAMPLE?</span>';
+                            }
+                        }
+                    }
+                });
+                
+                // Map logical step numbers to game modes
+                const modeMap = {
+                    1: 'KNIGHT_PATH_STEP_1', 2: 'KNIGHT_PATH_STEP_2', 3: 'KNIGHT_JUMP_1_CONFIRM',
+                    4: 'KNIGHT_PATH_STEP_3', 5: 'KNIGHT_PATH_STEP_4', 6: 'KNIGHT_JUMP_2_COMPLETE'
+                };
+                
+                const baseMode = this.isKamikaze ? 'KAMIKAZE_' : 'KNIGHT_';
+                
+                // For steps 1, 2, 4, 5, the mode is for path selection
+                if (stepNum < 6) {
+                    this.gameMode = baseMode + modeMap[stepNum];
+                } else {
+                    // Step 6 is confirmation, handled by next state logic
+                    this.gameMode = baseMode + 'JUMP_2_COMPLETE';
+                }
+            }
+            
+            handleTrampleConfirmation = (shouldTrample) => {
+                document.getElementById('trample-modal').style.display = 'none';
+                
+                const [targetX, targetY] = this.trampleTargetPos;
+                const key = `${targetX},${targetY}`;
+                const pieceToCapture = this.gameboard[key];
+
+                if (shouldTrample && pieceToCapture) {
+                    if (pieceToCapture.type === KING) {
+                        this.endGame(this.playersturn); 
+                        return;
+                    } 
+                    this.capturePiece(key, pieceToCapture);
+                    this.trampledPieces.push(pieceToCapture);
+                }
+                
+                this.trampleTargetPos = null;
+                
+                // Resume the path step: The next coordinates in the path are the same as the target that was just clicked
+                const [nextX, nextY] = [targetX, targetY]; 
+                
+                // Rerun the path selection handler for the step that was interrupted
+                this.handlePathStepSelection(nextX, nextY, this.currentLPathStep - 1, true); 
+            }
+
+
+            // This function handles a click on a path square or a final confirmation square
+            handlePathStepSelection = (nextX, nextY, stepNum, skipTrampleCheck = false) => {
+                // pX, pY is the *logical* start of the current path (Jump 1 Start or Jump 1 Dest)
+                const [pX, pY] = this.knightTempJumpPos; 
+                const knight = this.gameboard[`${this.selectedPos[0]},${this.selectedPos[1]}`]; // Get piece from actual location
+                const pieceAtNext = this.gameboard[`${nextX},${nextY}`];
+                const nextPosKey = `${nextX},${nextY}`;
+                
+                if (!knight || !isInBounds(nextX, nextY)) {
+                    this.resetMode();
+                    return;
+                }
+                
+                // --- 1. Trample/Path Capture Logic ---
+                // Only for intermediate path steps (1, 2, 4, 5)
+                if (stepNum === 1 || stepNum === 2 || stepNum === 4 || stepNum === 5) {
+                    if (pieceAtNext) {
+                        
+                        // FIX A: KAMIKAZE - Auto-capture any piece (friend or foe) instantly on the path.
+                        if (this.isKamikaze) {
+                            if (pieceAtNext.type === KING) { this.endGame(this.playersturn); return; }
+                            
+                            // Capture the piece and add to trampled list
+                            this.capturePiece(nextPosKey, pieceAtNext);
+                            this.trampledPieces.push(pieceAtNext);
+                        } 
+                        
+                        // REGULAR DOUBLE JUMP - Only Pawns prompt for trample
+                        else if (pieceAtNext.Color !== knight.Color && pieceAtNext.type === PAWN && !skipTrampleCheck) {
+                            this.trampleTargetPos = [nextX, nextY];
+                            // Show modal and return early
+                            document.getElementById('trample-modal').style.display = 'block';
+                            document.getElementById('trample-message').textContent = `TRAMPLE: Confirm action on ${pieceAtNext.Color} ${pieceAtNext.type} at ${String.fromCharCode(97 + nextX)}${nextY + 1}?`;
+                            this.updateStatus();
+                            return; 
+                        }
+                    }
+                }
+
+                // --- 2. Update Path Tracker (NO PHYSICAL MOVEMENT YET) ---
+                if (stepNum === 1 || stepNum === 2 || stepNum === 4 || stepNum === 5) {
+                    // Update the path tracker to the last confirmed path square
+                    this.knightTempJumpPos = [nextX, nextY]; 
+                    
+                    // The selected position remains the piece's physical location
+                    this.resetHighlighting();
+                    document.querySelector(`[data-x="${this.selectedPos[0]}"][data-y="${this.selectedPos[1]}"]`)?.classList.add('selected');
+                }
+                
+                // --- 3. Advance State ---
+                
+                if (stepNum === 1) { // Click 2: Path Step 1 chosen (choice)
+                    // Set the full path based on the chosen Step 1 square
+                    this.currentLPath = this.possibleLPaths[nextPosKey];
+                    this.enterPathStepMode(2); // Advance to Step 2 (forced)
+                } else if (stepNum === 2) { // Click 3: Path Step 2 completed (forced)
+                    this.enterPathStepMode(3); // Advance to JUMP 1 Confirmation (Click 4)
+                } else if (stepNum === 3) { // Click 4: JUMP 1 Confirmation
+                    this.knightContinueMove(4); // Execute Jump 1 move & transition to Jump 2 setup
+                } else if (stepNum === 4) { // Click 6: Path Step 3 chosen (choice)
+                    this.currentLPath = this.possibleLPaths[nextPosKey];
+                    this.enterPathStepMode(5); // Advance to Step 4 (forced)
+                } else if (stepNum === 5) { // Click 7: Path Step 4 completed (forced)
+                    this.enterPathStepMode(6); // Advance to JUMP 2 Confirmation (Click 8)
+                } else if (stepNum === 6) { // Click 8: JUMP 2 Confirmation (Final execution)
+                    this.knightContinueMove(7); // Execute Jump 2 move & end turn
+                }
+            }
+
+
+            knightContinueMove = (stepNum) => {
+                const [startX_physical, startY_physical] = this.selectedPos; 
+                const [destX, destY] = this.knightTargetPos;
+                
+                // Get the physical start position for the move.
+                let moveStartX, moveStartY;
+
+                if (stepNum === 4) {
+                    // JUMP 1: Starts from the piece's original selected position
+                    moveStartX = startX_physical;
+                    moveStartY = startY_physical;
+                } else if (stepNum === 7) {
+                    // JUMP 2: Final Turn Action (Click 8)
+                    
+                    // The piece is PHYSICALLY located at the Jump 1 Destination, held by this.selectedPos.
+                    moveStartX = startX_physical;
+                    moveStartY = startY_physical;
+                    
+                } else {
+                    console.error(`Unknown knight continuation state at step ${stepNum}.`);
+                    this.resetMode();
+                    return;
+                }
+                
+                // Check piece exists before anything else
+                const knight = this.gameboard[`${moveStartX},${moveStartY}`]; 
+                
+                if (!knight) {
+                    console.error(`ERROR: Knight piece not found at expected start position ${String.fromCharCode(97 + moveStartX)}${startY + 1} for final move. Resetting.`);
+                    this.message = `ERROR: Knight piece missing for final jump. Resetting.`;
+                    this.resetMode();
+                    return;
+                }
+
+                // IMPORTANT: selectedPos must be the start position for the movePiece logic to work
+                this.selectedPos = [moveStartX, moveStartY]; 
+
+                // 1. Perform the physical move (Start -> Destination) AND CAPTURE
+                // This is the point where the Knight moves from Jump 1 Destination to Jump 2 Destination
+                if (!this._performKnightJumpMove(moveStartX, moveStartY, destX, destY)) return; 
+
+                // 2. Finalize logic based on jump number
+                if (stepNum === 4) {
+                    // JUMP 1: Setup for Jump 2
+                    this.knightTempJumpPos = [destX, destY]; // New physical location, used as start for Jump 2 pathing
+                    this.currentLPath = null;
+                    this.possibleLPaths = {};
+                    
+                    this.resetHighlighting();
+                    document.querySelector(`[data-x="${destX}"][data-y="${destY}"]`)?.classList.add('selected');
+                    
+                    const finalJumpMoves = knightList(destX, destY);
+                    this.availableMoves = finalJumpMoves.filter(([mx, my]) => knight.noConflict(this.gameboard, knight.Color, mx, my));
+
+                    this.availableMoves.forEach(([mx, my]) => {
+                        document.querySelector(`[data-x="${mx}"][data-y="${my}"]`)?.classList.add('highlight-knight-destination');
+                    });
+                    
+                    this.gameMode = this.isKamikaze ? 'KAMIKAZE_JUMP_2' : 'KNIGHT_JUMP_2';
+                    this.message = `DOUBLE JUMP (5/8): Select the L-move endpoint (blue highlight) for JUMP 2 Destination.`;
+
+                } else if (stepNum === 7) {
+                    // JUMP 2: Final Turn Action (Click 8)
+                    
+                    // Crucial: Clear board highlights and set a new mode BEFORE showing the modal
+                    this.resetHighlighting();
+                    this.gameMode = 'KAMIKAZE_AWAIT_DETONATION';
+                    
+                    if (this.isKamikaze) {
+                        this.message = `Kamikaze Jump complete. Captured/Trampled ${this.trampledPieces.length} pieces. Detonate now!`;
+                        this.updateStatus(); 
+                        
+                        this.showKamikazeCompleteModal();
+                    } else {
+                        // Regular jump completion
+                        knight.usedSpecialAbility = true;
+                        this.message = `${knight.Color}'s ${knight.type} performed a Double Jump! Trampled ${this.trampledPieces.length} pawns.`;
+                        
+                        // Pass turn normally for non-Kamikaze
+                        this.switchTurn();
+                        this.resetMode();
+                    }
+                }
+            }
+            
+            // NEW: Kamikaze Modal Display
+            showKamikazeCompleteModal = () => {
+                document.getElementById('kamikaze-complete-message').textContent = 
+                    `The Knight has reached its final destination and captured pieces along its path. Captured/Trampled: ${this.trampledPieces.length} pieces. Click 'Detonate' to finalize the sacrifice and end the turn.`;
+                
+                document.getElementById('kamikaze-complete-modal').style.display = 'block';
+            }
+
+            // NEW: Kamikaze Suicide & Turn End
+            finalizeKamikazeSuicide = () => {
+                document.getElementById('kamikaze-complete-modal').style.display = 'none';
+                
+                const [finalX, finalY] = this.selectedPos;
+                const endPosKey = `${finalX},${finalY}`;
+                const knight = this.gameboard[endPosKey]; 
+                
+                if (!knight || knight.type !== KNIGHT) {
+                    this.message = "Error: Knight disappeared prematurely!";
+                } else {
+                    // Suicide the Knight
+                    this.capturePiece(endPosKey, knight); 
+                    this.message = `Knight Kamikaze detonated! Suicide complete.`;
+                }
+
+                // Final cleanup and turn pass
+                this.switchTurn();
+                this.resetMode();
+            }
+
+            // --- NON-KNIGHT KAMIKAZE EXECUTION ---
+            executeKamikazeMove = (endX, endY) => {
+                const [startX, startY] = this.selectedPos;
+                const piece = this.gameboard[`${startX},${startY}`];
+                let kills = 0;
+
+                // 1. Capture/Destroy pieces along the path/target area
+                // Kamikaze path squares are stored in this.availableMoves if they contain a piece.
+                this.availableMoves.forEach(([kx, ky]) => {
+                    const key = `${kx},${ky}`;
+                    const target = this.gameboard[key];
+                    if (target) {
+                        if (target.type === KING) { this.endGame(piece.Color); return; } // Should stop before King, but this handles a direct Kamikaze on King
+                        this.capturePiece(key, target);
+                        kills++;
+                    }
+                });
+
+                // 2. Suicide the original piece
+                this.capturePiece(`${startX},${startY}`, piece);
+
+                this.message = `${piece.Color}'s ${piece.type} detonated, destroying ${kills} enemy pieces!`;
+            }
+
+            // --- KNIGHT KAMIKAZE EXECUTION (DEPRECATED - now handled by modal) ---
+            executeKnightKamikaze = (finalX, finalY) => {
+                 // This function is no longer called directly. The move/capture is done in _performKnightJumpMove
+                 // The suicide and turn pass is done in finalizeKamikazeSuicide
+                console.warn("executeKnightKamikaze is now handled by finalizeKamikazeSuicide.");
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executeKnightDoubleJump = (finalX, finalY) => {
+                // _performKnightJumpMove already handled the move and capture.
+                const endPosKey = `${finalX},${finalY}`;
+                const piece = this.gameboard[endPosKey];
+                
+                piece.usedSpecialAbility = true;
+                this.drawBoard(); 
+                this.message = `${piece.Color}'s ${piece.type} performed a Double Jump! Trampled ${this.trampledPieces.length} pawns.`;
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executeMerge = (startX, startY, endX, endY, targetPiece) => {
+                const pieceA = this.gameboard[`${startX},${startY}`];
+                const mergeTarget = this.mergeTargets.find(([mx, my]) => mx === endX && my === endY);
+
+                if (!mergeTarget) { this.message = "Merge failed."; this.resetSelection(); return; }
+                
+                const newPieceType = mergeTarget[2];
+                const newPieceClass = PieceClassMap[newPieceType];
+
+                if (!newPieceClass) { this.message = `Error: Could not find class for ${newPieceType}.`; this.resetSelection(); return; }
+                
+                const garrisonCount = (pieceA.garrisonedPawns || 0) + (targetPiece.garrisonedPawns || 0);
+                const newPiece = new newPieceClass(pieceA.Color);
+                newPiece.garrisonedPawns = garrisonCount;
+                newPiece.usedSpecialAbility = pieceA.usedSpecialAbility || targetPiece.usedSpecialAbility;
+
+                this.gameboard[`${endX},${endY}`] = newPiece;
+                delete this.gameboard[`${startX},${startY}`];
+                
+                this.message = `${pieceA.Color} merged ${pieceA.type} and ${targetPiece.type} to form a ${newPieceType}!`;
+                this.drawBoard(); 
+            }
+            
+            // *FIXED* - Converted to Arrow Function
+            executeSpecialAbility = (sx, sy, x, y) => {
+                 const piece = this.gameboard[`${sx},${sy}`];
+                 
+                 switch (this.abilityType) {
+                     case 'PAWN_SPAWN': this.executePawnSpawn(x, y); break;
+                     case 'QUEEN_KILL': this.executeQueenKill(sx, sy); break;
+                     case 'OLIPHAUNT_RANGED_ATTACK': this.executeOliphauntRangedAttack(x, y); break;
+                     default: this.message = `Error: Unknown ability type ${this.abilityType}.`; break;
+                 }
+            }
+            
+            // *FIXED* - Converted to Arrow Function
+            executeRookGarrison = (rookX, rookY, pawnX, pawnY) => {
+                const rook = this.gameboard[`${rookX},${rookY}`];
+                const pawnKey = `${pawnX},${pawnY}`;
+
+                if (rook.type === ROOK) rook.usedSpecialAbility = true;
+
+                rook.garrisonedPawns++;
+                delete this.gameboard[pawnKey];  // Remove pawn from board
+
+                this.drawBoard(); 
+                this.updateDeadPile();
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executeRookDeploy = (rookX, rookY, endX, endY) => {
+                const rook = this.gameboard[`${rookX},${rookY}`];
+                if (rook.garrisonedPawns <= 0) return;
+
+                const newPawn = new Pawn(rook.Color, rook.Color === WHITE ? 1 : -1);
+                this.gameboard[`${endX},${endY}`] = newPawn;
+                rook.garrisonedPawns--;
+                
+                // Check for instant promotion
+                if (newPawn.Color === WHITE && endY === 7 || newPawn.Color === BLACK && endY === 0) {
+                    this.pawnPromotionTarget = [endX, endY];
+                    this.showPromotionModal();
+                    return;
+                }
+
+                this.drawBoard(); 
+                this.message = `Pawn deployed from Rook to ${String.fromCharCode(97 + endX)}${endY + 1}.`;
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executeRookDeployAttack = (rookX, rookY, endX, endY) => {
+                const rook = this.gameboard[`${rookX},${rookY}`];
+                if (rook.garrisonedPawns <= 0) return;
+                
+                const capturedPiece = this.gameboard[`${endX},${endY}`];
+                if (capturedPiece && capturedPiece.type === KING) { this.endGame(rook.Color); return; }
+                
+                this.capturePiece(`${endX},${endY}`, capturedPiece);
+
+                rook.garrisonedPawns--;
+
+                this.drawBoard(); 
+                this.message = `Pawn attacked from Rook, capturing ${capturedPiece.type}.`;
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executePawnSpawn = (endX, endY) => {
+                const king = this.gameboard[`${this.selectedPos[0]},${this.selectedPos[1]}`];
+                const newPawn = new Pawn(king.Color, king.Color === WHITE ? 1 : -1);
+                this.gameboard[`${endX},${endY}`] = newPawn;
+
+                this.drawBoard();
+                this.message = `King spawned a Pawn at ${String.fromCharCode(97 + endX)}${endY + 1}.`;
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executeQueenKill = (x, y) => {
+                const queen = this.gameboard[`${x},${y}`];
+                let kills = 0;
+                kingList(x, y).forEach(([kx, ky]) => {
+                    const key = `${kx},${ky}`;
+                    const target = this.gameboard[key];
+                    if (target && target.Color !== queen.Color) {
+                        if (target.type === KING) { this.endGame(queen.Color); return; }
+                        this.capturePiece(key, target);
+                        kills++;
+                    }
+                });
+                queen.usedSpecialAbility = true;
+                this.drawBoard();
+                this.message = `Queen swung her axe, killing ${kills} enemy pieces!`;
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executeOliphauntRangedAttack = (endX, endY) => {
+                const oliphaunt = this.gameboard[`${this.selectedPos[0]},${this.selectedPos[1]}`];
+                const capturedPiece = this.gameboard[`${endX},${endY}`];
+
+                if (capturedPiece) {
+                    if (capturedPiece.type === KING) { this.endGame(oliphaunt.Color); return; }
+                    this.capturePiece(`${endX},${endY}`, capturedPiece);
+                    this.message = `Oliphaunt sniped the ${capturedPiece.type} at ${String.fromCharCode(97 + endX)}${endY + 1}.`;
+                } else {
+                    this.message = `Oliphaunt missed its shot!`;
+                }
+                this.drawBoard();
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executeResurrect = (endX, endY, pieceToPlace) => {
+                const [sx, sy] = this.selectedPos;
+                const attackingPiece = this.gameboard[`${sx},${sy}`];
+
+                const deadPile = this.deadPile[pieceToPlace.Color];
+                const index = deadPile.findIndex(p => p === pieceToPlace); 
+                
+                if (index !== -1) {
+                    deadPile.splice(index, 1);
+                } else {
+                    this.message = "Error: Piece not found in dead pile.";
+                    return;
+                }
+                
+                const newPiece = new PieceClassMap[pieceToPlace.type](pieceToPlace.Color);
+                newPiece.usedSpecialAbility = pieceToPlace.usedSpecialAbility;
+                newPiece.garrisonedPawns = pieceToPlace.garrisonedPawns;
+
+                this.gameboard[`${endX},${endY}`] = newPiece;
+                
+                if ([BISHOP, CATHEDRAL].includes(attackingPiece.type)) {
+                    attackingPiece.usedSpecialAbility = true;
+                }
+                
+                this.drawBoard();
+                this.message = `${attackingPiece.type} resurrected ${newPiece.type} at ${String.fromCharCode(97 + endX)}${endY + 1}.`;
+                this.resurrectionCandidate = null;
+            }
+
+
+            switchTurn = () => { this.playersturn = (this.playersturn === WHITE) ? BLACK : WHITE; this.message = `${this.playersturn}'s turn.`; }
+            
+            // *FIXED* - Converted to Arrow Function
+            capturePiece = (key, piece) => {
+                const revertMap = { [CATHEDRAL]: [ROOK, BISHOP], [OLIPHAUNT]: [ROOK, KNIGHT], [MISSIONARY]: [BISHOP, KNIGHT] };
+                
+                if (piece.type === KING) {
+                    this.endGame(piece.Color === WHITE ? BLACK : WHITE);
+                    delete this.gameboard[key];
+                    return;
+                }
+
+                delete this.gameboard[key];
+
+                if (revertMap[piece.type]) {
+                    const components = revertMap[piece.type];
+                    components.forEach(type => {
+                        const revertedPiece = new PieceClassMap[type](piece.Color);
+                        revertedPiece.usedSpecialAbility = piece.usedSpecialAbility;
+                        if (piece.garrisonedPawns > 0) { revertedPiece.garrisonedPawns = piece.garrisonedPawns; piece.garrisonedPawns = 0; }
+                        this.deadPile[piece.Color].push(revertedPiece);
+                    });
+                } else {
+                    this.deadPile[piece.Color].push(piece);
+                }
+                this.updateDeadPile();
+                this.drawBoard();
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            movePiece = (startX, startY, endX, endY) => {
+                const piece = this.gameboard[`${startX},${startY}`];
+                
+                // GUARD: Ensure the moving piece exists before proceeding
+                if (!piece) {
+                    console.error(`Move failed: No piece found at start position ${startX},${startY}`);
+                    this.resetMode(); 
+                    return;
+                }
+                
+                const capturedPiece = this.gameboard[`${endX},${endY}`];
+                
+                if (capturedPiece) {
+                    if (capturedPiece.type === KING) { this.endGame(piece.Color); return; }
+                    this.capturePiece(`${endX},${endY}`, capturedPiece);
+                }
+                
+                this.gameboard[`${endX},${endY}`] = piece;
+                delete this.gameboard[`${startX},${startY}`];
+
+                if (piece instanceof Pawn) piece.hasMoved = true;
+                
+                this.drawBoard(); 
+                this.message = `${piece.Color}'s ${piece.type} moved.`;
+            }
+            
+            // *FIXED* - Converted to Arrow Function
+            executePawnFormationMove = (startX, startY, endX, endY, size, formation) => {
+                const direction = this.gameboard[`${startX},${startY}`].direction;
+                const forwardStep = direction;
+                
+                const captureKey = `${endX},${endY}`;
+                const capturedPiece = this.gameboard[captureKey];
+                
+                if (capturedPiece) {
+                    if (capturedPiece.type === KING) { this.endGame(this.playersturn); return; }
+                    
+                    // FIX: Only capture if the piece is an ENEMY. If it's a friendly piece (like a King), don't capture.
+                    if (capturedPiece.Color !== this.playersturn) {
+                        this.capturePiece(captureKey, capturedPiece);
+                    }
+                }
+                
+                // Move pawns
+                formation.forEach(([px, py]) => {
+                    const newY = py + forwardStep;
+                    const oldKey = `${px},${py}`;
+                    const pawn = this.gameboard[oldKey];
+                    pawn.hasMoved = true;
+                    this.gameboard[`${px},${newY}`] = pawn;
+                    delete this.gameboard[oldKey];
+                });
+                this.drawBoard(); // Redraw immediately to show movement
+                this.message = `V-Formation (${size}) moved forward! Captured ${capturedPiece && capturedPiece.Color !== this.playersturn ? capturedPiece.type : 'nothing'}.`;
+            }
+            
+            // *FIXED* - Converted to Arrow Function
+            showPromotionModal = () => {
+                const [x, y] = this.pawnPromotionTarget;
+                const pawn = this.gameboard[`${x},${y}`];
+                
+                if (!pawn || pawn.type !== PAWN) return;
+
+                const color = pawn.Color;
+                const optionsEl = document.getElementById('promotion-options');
+                optionsEl.innerHTML = '';
+                
+                const promotionTypes = [QUEEN, ROOK, BISHOP, KNIGHT]; 
+                
+                promotionTypes.forEach(type => {
+                    const pieceClass = PieceClassMap[type];
+                    const piece = new pieceClass(color);
+                    const button = document.createElement('button');
+                    button.className = `promotion-piece ${color}`;
+                    button.innerHTML = piece.toString();
+                    button.onclick = () => this.executePromotion(type);
+                    optionsEl.appendChild(button);
+                });
+
+                document.getElementById('promotion-modal').style.display = 'block';
+            }
+
+            // *FIXED* - Converted to Arrow Function
+            executePromotion = (newType) => {
+                const [x, y] = this.pawnPromotionTarget;
+                const pawn = this.gameboard[`${x},${y}`];
+                const color = pawn.Color;
+                
+                const newPieceClass = PieceClassMap[newType];
+                const newPiece = new newPieceClass(color);
+                newPiece.isPromoted = true;
+
+                this.gameboard[`${x},${y}`] = newPiece;
+                
+                document.getElementById('promotion-modal').style.display = 'none';
+                this.pawnPromotionTarget = null;
+                
+                this.drawBoard();
+                this.message = `${color}'s Pawn promoted to ${newType}!`;
+
+                this.switchTurn();
+                this.resetMode();
+            }
+        }
+
+        window.onload = () => {
+            new Game();
+        };
+    </script>
+</body>
+</html>
